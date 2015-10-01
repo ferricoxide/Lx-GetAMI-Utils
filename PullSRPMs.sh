@@ -38,6 +38,26 @@ done
 EOF
 }
 
+# Verify provisioning-key's validity
+function KeyValid() {
+   if [[ $(aws ec2 describe-key-pairs --filters \
+           "Name=key-name,Values=${KEYNAME}" --query \
+           "KeyPairs[].KeyName" --out text) != "${KEYNAME}" ]]
+   then
+      echo "Specified key not found" > /dev/stderr
+      exit 1
+   fi
+}
+
+# Look for most-recently published Amazon Linux AMI (HVM)
+function LatestAMI() {
+   ${AWSBIN} ec2 describe-images --owner amazon --filters \
+      "Name=image-type,Values=machine" "Name=architecture,Values=x86_64" \
+      "Name=root-device-type,Values=ebs" "Name=name,Values=amzn-ami-hvm-*" \
+      --query 'Images[].{ID:ImageId,NAME:Name,DATE:CreationDate}' \
+      --output text | sort -n | sed -n '$p' | awk '{print $2}'
+}
+ 
 # Make sure the AWScli is installed
 if [[ $(aws --version > /dev/null 2>&1)$? -ne 0 ]]
 then
@@ -47,24 +67,14 @@ then
    sh /tmp/awscli-bundle/install -i /opt/aws -b /usr/bin/aws
 fi
 
-# Check Key-validity
-if [[ $(aws ec2 describe-key-pairs --filters \
-        "Name=key-name,Values=${KEYNAME}" --query \
-        "KeyPairs[].KeyName" --out text) != "${KEYNAME}" ]]
-then
-   echo "Specified key not found" > /dev/stderr
-   exit 1
-fi
+# Ensure launch-key is valid
+KeyValid
 
-
-# Look for most-recently published Amazon Linux AMI (HVM)
+# Select an AMI for launching
 echo "Determining latest-available Amazon Linux AMI-ID..."
-TARGAMI=$(${AWSBIN} ec2 describe-images --owner amazon --filters \
-   "Name=image-type,Values=machine" "Name=architecture,Values=x86_64" \
-   "Name=root-device-type,Values=ebs" "Name=name,Values=amzn-ami-hvm-*" \
-   --query 'Images[].{ID:ImageId,NAME:Name,DATE:CreationDate}' \
-   --output text | sort -n | sed -n '$p' | awk '{print $2}')
+TARGAMI=$(LatestAMI)
 
+# Launch an instance and collect its ID
 LAUNCHED=$(aws ec2 run-instances --image-id ${TARGAMI} --instance-type \
           t2.micro --key-name ${KEYNAME} --query "Instances[].InstanceId" \
           --out text)
