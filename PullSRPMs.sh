@@ -29,13 +29,15 @@ AMZNUTIL="aws-amitools-ec2
           python-boto"
 
 # Connect to AMI and stage SRPM files
-function PULLSRC() {
-   ssh ${SRCHOST} << EOF
-for PKG in ${AMZNUTIL}
-do
-get_reference_source $PKG
-done
-EOF
+function PullSRPMs() {
+   # Pull SRPMs to instance
+   for PKG in ${AMZNUTIL}
+   do
+      ssh ec2-user@${INSTANCEDNS} "echo yes | get_reference_source -p $PKG"
+   done
+
+   # Pull SRPMs to launch-host
+   scp ec2-user@${INSTANCEDNS}:/usr/src/srpm/debug/*.scr.rpm .
 }
 
 # Verify provisioning-key's validity
@@ -78,5 +80,14 @@ TARGAMI=$(LatestAMI)
 LAUNCHED=$(aws ec2 run-instances --image-id ${TARGAMI} --instance-type \
           t2.micro --key-name ${KEYNAME} --query "Instances[].InstanceId" \
           --out text)
+# Get new instance's private DNS name
+INSTANCEDNS=$(aws ec2 describe-instances --instance-ids ${LAUNCHED} \
+              --query "Reservations[].Instances[].PrivateDnsName" --out text)
 
-echo "Launched instance ${LAUNCHED}"
+# Output actionable info
+echo "Launched instance ${LAUNCHED} [${INSTANCEDNS}]"
+
+# Pull down updated AWS CLI source-RPMs
+###########################
+## PullSRPMs
+###########################
