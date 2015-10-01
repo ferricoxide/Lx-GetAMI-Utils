@@ -5,10 +5,16 @@
 # utilities and modules
 #
 #################################################################
+KEYNAME="${1:-UNDEF}"
 AWSBIN="/opt/aws/bin/aws"
-export AWS_DEFAULT_REGION=$(curl -s \
-   http://169.254.169.254/latest/dynamic/instance-identity/document | \
-   awk -F":" '/"region"/{ print $2 }' | sed -e 's/^ "//' -e 's/".*$//')
+METADATA="http://169.254.169.254/latest/dynamic/instance-identity/document/" 
+if [[ -x /usr/bin/jq ]]
+then
+   export AWS_DEFAULT_REGION=$(curl -s ${METADATA} | jq -r .region)
+else
+   export AWS_DEFAULT_REGION=$(curl -s ${METADATA} | \
+      awk -F":" '/"region"/{ print $2 }' | sed -e 's/^ "//' -e 's/".*$//')
+fi
 AMZNUTIL="aws-amitools-ec2
           aws-apitools-as
           aws-apitools-common
@@ -32,7 +38,26 @@ done
 EOF
 }
 
+# Make sure the AWScli is installed
+if [[ $(aws --version > /dev/null 2>&1)$? -ne 0 ]]
+then
+   curl -s -L https://s3.amazonaws.com/aws-cli/awscli-bundle.zip \
+      -o /tmp/awscli-bundle.zip
+   ( cd /tmp ; unzip awscli-bundle.zip )
+   sh /tmp/awscli-bundle/install -i /opt/aws -b /usr/bin/aws
+fi
 
+# Check Key-validity
+if [[ $(aws ec2 describe-key-pairs --filters \
+        "Name=key-name,Values=${KEYNAME}" --query \
+        "KeyPairs[].KeyName" --out text) != "${KEYNAME}" ]]
+then
+   echo "Specified key not found" > /dev/stderr
+   exit 1
+fi
+
+
+# Look for most-recently published Amazon Linux AMI (HVM)
 echo "Determining latest-available Amazon Linux AMI-ID..."
 TARGAMI=$(${AWSBIN} ec2 describe-images --owner amazon --filters \
    "Name=image-type,Values=machine" "Name=architecture,Values=x86_64" \
@@ -40,5 +65,8 @@ TARGAMI=$(${AWSBIN} ec2 describe-images --owner amazon --filters \
    --query 'Images[].{ID:ImageId,NAME:Name,DATE:CreationDate}' \
    --output text | sort -n | sed -n '$p' | awk '{print $2}')
 
-echo $TARGAMI
-echo $AMZNUTIL
+LAUNCHED=$(aws ec2 run-instances --image-id ${TARGAMI} --instance-type \
+          t2.micro --key-name ${KEYNAME} --query "Instances[].InstanceId" \
+          --out text)
+
+echo "Launched instance ${LAUNCHED}"
