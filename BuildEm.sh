@@ -7,13 +7,14 @@ RPMDEPS=(
          rpm-build
          dos2unix
         )
+BUILDROOT="${HOME}/rpmbuild"
 
 
 # Set up RPM build environment
 function PrepBuildDirs() {
    # Ensure RPM build-tree exists
-   test -d ${HOME}/rpmbuild || mkdir -p \
-         ${HOME}/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS} > /dev/null 2>&1
+   test -d ${BUILDROOT} || mkdir -p \
+         ${BUILDROOT}/{BUILD,RPMS,SOURCES,SPECS,SRPMS} > /dev/null 2>&1
 
    # Ensure RPM macro-definition file exists
    test -f ${HOME}/.rpmmacros || echo '%_topdir %(echo $HOME)/rpmbuild' \
@@ -29,24 +30,24 @@ function ExtractSource() {
   done
 }
 
-# Move .spec files to ${HOME}/rpmbuild/SPECS
+# Move .spec files to ${BUILDROOT}/SPECS
 function HomeSpecs() {
   local SPECFILES="/tmp/srpm_extract/*.spec"
-  mv ${SPECFILES} ${HOME}/rpmbuild/SPECS
+  mv ${SPECFILES} ${BUILDROOT}/SPECS
 }
 
-# Move source files to ${HOME}/rpmbuild/SOURCES
+# Move source files to ${BUILDROOT}/SOURCES
 function HomeSources() {
    (
       cd /tmp/srpm_extract
       # Move the non-archived sources
-      mv $(awk '/^Source/{print $2}' ${HOME}/rpmbuild/SPECS/*.spec | sed '{
+      mv $(awk '/^Source/{print $2}' ${BUILDROOT}/SPECS/*.spec | sed '{
          /tar.gz/d
          /.tgz/d
          /.zip/d
-      }') ${HOME}/rpmbuild/SOURCES
+      }') ${BUILDROOT}/SOURCES
       # Move the archived sources
-      mv * ${HOME}/rpmbuild/SOURCES
+      mv * ${BUILDROOT}/SOURCES
    )
 }
 
@@ -66,7 +67,7 @@ function GetMissingRPMS() {
          yum install -q -y ${ADDRPMS}
       fi
    done
-)
+}
 
 GetMissingRPMS
 PrepBuildDirs
