@@ -14,4 +14,14 @@ function PrepBuildDirs() {
       > ${HOME}/.rpmmacros
 }
 
+function ExtractSource() {
+  local EXTDIR="/tmp/srpm_extract"
+  test -d ${EXTDIR} || mkdir -p ${EXTDIR}
+  for SRPM in *.src.rpm
+  do
+     rpm2cpio ${SRPM} | ( cd ${EXTDIR} ; cpio -idv )
+  done
+}
+
 PrepBuildDirs
+ExtractSource
