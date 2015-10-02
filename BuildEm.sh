@@ -3,7 +3,7 @@
 # Script to build the downloaded SRPMs
 #
 #################################################################
-SAVEDIR="$(dirname ${0})"
+SAVEDIR="$(readlink -f $(dirname ${0}))"
 RPMDEPS=(
          rpm-build
          dos2unix
