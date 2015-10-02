@@ -3,6 +3,7 @@
 # Script to build the downloaded SRPMs
 #
 #################################################################
+SAVEDIR="$(dirname ${0})"
 RPMDEPS=(
          rpm-build
          dos2unix
@@ -26,7 +27,8 @@ function ExtractSource() {
   test -d ${EXTDIR} || mkdir -p ${EXTDIR}
   for SRPM in *.src.rpm
   do
-     rpm2cpio ${SRPM} | ( cd ${EXTDIR} ; cpio -idv )
+     echo "Extracting ${SRPM}"
+     rpm2cpio ${SRPM} | ( cd ${EXTDIR} ; cpio -id )
   done
 }
 
@@ -69,8 +71,34 @@ function GetMissingRPMS() {
    done
 }
 
+# Build the RPMs
+function BuildRPMs() {
+   cd ${BUILDROOT}/SPECS
+   for SPEC in *.spec
+   do
+      ELEMENT=$(echo ${SPEC} | sed 's/.spec//')
+      echo "Building ${ELEMENT}..."
+      if [[ $(rpmbuild --quiet -ba ${SPEC} > /dev/null 2>&1)$? -ne 0 ]]
+      then
+         printf "\tBuild did not exit cleanly.\n" > /dev/stderr
+      else
+         printf "\tBuild exited cleanly.\n" 
+      fi
+   done
+   
+}
+
+
+#######################
+## Main functionality
+#######################
 GetMissingRPMS
 PrepBuildDirs
 ExtractSource
 HomeSpecs
 HomeSources
+BuildRPMs
+
+# Copy built RPMs to project-dir
+echo "Copying new RPMs to project directory".
+mv $(find ${BUILDROOT}/RPMS/ -type f) ${SAVEDIR}
