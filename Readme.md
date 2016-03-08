@@ -23,9 +23,10 @@ As of the creation of this RPM, the following AWS-related packages were availabl
 Most of the AWS packages change fairly infrequently. It's recommended that the procedures noted at the head of this README be executed on approximately a quarterly-basis.
 
 Notes:
-* The `aws-cli` is not relevant to CentOS 6. It is recommended to get its functionality via the [install-bundle ZIP](http://docs.aws.amazon.com/cli/latest/userguide/installing.html).
+* The `aws-cli` RPM is not relevant to Red Hat or CentOS 6/7. It is recommended to get its functionality via the [install-bundle ZIP](http://docs.aws.amazon.com/cli/latest/userguide/installing.html).
 * The `get_reference_source` is only relevant for the original AWS-hosted source-RPMs. It is provided in this bundle for completeness but is not otherwise usefully-functional
 * The Amazon python-boto RPM requires Python 2.7. This version is not compatible with current Enterprise Linux 6 derivatives.
+* If building on CentOS 7, it is recommended to add `%dist .el7` to `${HOME}/.rpmmacros`. Otherwise, RPMs will have `el7.centos` within their Release-name field.
 * Installation of these RPMs will pull in the following package-dependencies:
   * alsa-lib
   * compat-readline5
