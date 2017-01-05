@@ -1,12 +1,12 @@
 %define name aws-cfn-bootstrap
 %define version 1.4
-%define unmangled_version 1.4-10
-%define release 10
+%define unmangled_version 1.4-15
+%define release 15.9
 
 Summary: An EC2 bootstrapper for CloudFormation
 Name: %{name}
 Version: %{version}
-Release: %{release}
+Release: %{release}%{?dist}
 Source0: %{name}-%{unmangled_version}.tar.gz
 License: Amazon Software License
 Group: Development/Libraries
