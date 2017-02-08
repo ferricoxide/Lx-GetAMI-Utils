@@ -1,0 +1,1 @@
+sed -i -e 's/ system-python$/ python/' -e 's/%ghost/& %attr(600,root,root)/' awslogs.spec
