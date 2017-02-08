@@ -1,0 +1,377 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This template deploys an EL7 with RPM packaging tools pre-installed",
+  "Parameters": {
+    "AmiDistro": {
+      "Description": "Linux distro of the AMI",
+      "Type": "String",
+      "Default": "CentOS",
+      "AllowedValues": [
+        "CentOS",
+        "RedHat"
+      ]
+    },
+    "AmiId": {
+      "Description": "ID of the AMI to launch",
+      "ConstraintDescription": "All ID's must start 'ami-' followed by an 8- to 17-character alphanumeric string.",
+      "Type": "String",
+      "AllowedPattern": "^ami-[0-9a-z]{8}$|^ami-[0-9a-z]{17}$"
+    },
+    "HostDomain": {
+      "Description": "Domain portion of FQDN for RPM-builder instance",
+      "Type" : "String",
+      "AllowedPattern": "^[0-9a-z-.]{4,48}$"
+    },
+
+    "InstanceRole" : {
+      "Description" : "IAM instance role to apply to the instance(s)",
+      "Type" : "String",
+      "Default" : ""
+    },
+    "InstanceType": {
+      "Description": "Amazon EC2 instance type",
+      "ConstraintDescription": "must be a valid EC2 instance type.",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium",
+        "t2.large",
+        "t2.xlarge",
+        "t2.2xlarge",
+        "m4.large"
+      ]
+    },
+    "KeyPairName": {
+      "Description": "Public/private key pairs allow you to securely connect to your instance after it launches",
+      "Type": "AWS::EC2::KeyPair::KeyName"
+    },
+    "NoPublicIp": {
+      "Description": "Controls whether to assign the instance a public IP.",
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "LoginUser": {
+      "Description": "Userid to login with",
+      "ConstraintDescription": "Alphanumeric (lowercase) string between 6 and 10 characters",
+      "Type": "String",
+      "Default": "maintuser",
+      "AllowedPattern": "^[0-9a-z]{5,12}$"
+    },
+    "NoReboot": {
+      "Description": "Controls whether to reboot the instance as the last step of cfn-init execution",
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "RootEBSsize": {
+      "Description": "Select size of root EBS volume (in GiB)",
+      "ConstraintDescription": "A numeric value between '20' and '50'.",
+      "Type": "Number",
+      "Default": "20",
+      "MinValue": "20",
+      "MaxValue": "50"
+    },
+    "RpmBucket": {
+      "Description": "Name of the Bucket for fetching/stowing RPMs",
+      "ConstraintDescription": "All characters must be legal DNS characters",
+      "Type": "String",
+      "AllowedPattern": "^[0-9a-z-]{4,48}$"
+    },
+    "SecurityGroupIds": {
+      "Description": "List of security groups to apply to the instance(s)",
+      "Type": "List<AWS::EC2::SecurityGroup::Id>"
+    },
+    "SubnetIds": {
+      "Type": "String",
+      "Description": "Subnet to associate to the Instance"
+    }
+  },
+  "Conditions": {
+    "AssignInstanceRole" :
+    {
+      "Fn::Not" : [
+        {
+          "Fn::Equals" : [
+            {
+              "Ref" : "InstanceRole"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "Reboot": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "NoReboot"
+            },
+            "true"
+          ]
+        }
+      ]
+    },
+    "AssignPublicIp": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "NoPublicIp"
+            },
+            "true"
+          ]
+        }
+      ]
+    }
+  },
+  "Mappings": {
+    "Distro2RootDevice": {
+      "RedHat": {
+        "DeviceName": "sda1"
+      },
+      "CentOS": {
+        "DeviceName": "sda1"
+      }
+    }
+  },
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "EC2 Instance Configuration"
+          },
+          "Parameters": [
+            "AmiId",
+            "AmiDistro",
+            "InstanceType",
+            "InstanceRole",
+            "LoginUser",
+            "KeyPairName",
+            "RpmBucket",
+            "NoReboot",
+            "RootEBSsize"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "HostDomain",
+            "SubnetIds",
+            "SecurityGroupIds",
+            "NoPublicIp"
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "ValidationInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile" : {
+          "Fn::If" : [
+            "AssignInstanceRole",
+            { "Ref" : "InstanceRole" },
+            { "Ref" : "AWS::NoValue" }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": {
+              "Fn::Join": [
+                "",
+                [
+                  "/dev/",
+                  {
+                    "Fn::FindInMap": [
+                      "Distro2RootDevice",
+                      {
+                        "Ref": "AmiDistro"
+                      },
+                      "DeviceName"
+                    ]
+                  }
+                ]
+              ]
+            },
+            "Ebs": {
+              "VolumeType": "gp2",
+              "VolumeSize" : {
+                "Ref": "RootEBSsize"
+              },
+              "DeleteOnTermination": "true"
+            }
+          }
+        ],
+        "KeyName": {
+          "Ref": "KeyPairName"
+        },
+        "NetworkInterfaces": [
+          {
+            "DeviceIndex": "0",
+            "AssociatePublicIpAddress": {
+              "Fn::If": [
+                "AssignPublicIp",
+                "true",
+                "false"
+              ]
+            },
+            "GroupSet": {
+              "Ref": "SecurityGroupIds"
+            },
+            "SubnetId": {
+              "Ref": "SubnetIds"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#cloud-config\n",
+                "\n",
+                "fqdn: rpmdev7.",
+		{
+		  "Ref": "HostDomain"
+	        },
+		"\n",
+                "manage_etc_hosts: true\n",
+                "\n",
+                "system_info:\n",
+                "  default_user:\n",
+                "    name: ",
+                {
+                  "Ref": "LoginUser"
+                },
+                "\n",
+                "\n",
+                "write_files:\n",
+                "  - path: /usr/local/bin/buildem.sh\n",
+                "    content: |\n",
+                "        #!/bin/bash\n",
+                "        \n",
+                "        # The aws-vpc-nat RPM requires upstart. The upstart\n",
+                "        # subsystem is deprecated in EL7 (skipping).\n",
+                "        for BUILD in aws-amitools-ec2 aws-apitools-as ",
+                         "aws-apitools-cfn aws-apitools-ec2 aws-apitools-elb ",
+                         "aws-apitools-iam aws-apitools-mon aws-apitools-rds ",
+                         "aws-scripts-ses ec2-utils\n",
+                "        do\n",
+                "           rpmbuild --rebuild /usr/local/src/${BUILD}*.rpm\n",
+                "        done\n",
+                "        \n",
+                "        cd /home/${USER}/rpmbuild/SPECS/\n",
+                "        \n",
+                "        for BUILD in aws-cfn-bootstrap awslogs ",
+                         "aws-cli-plugin-cloudwatch-logs\n",
+                "        do\n",
+                "           rpm2cpio /usr/local/src/${BUILD}* | cpio -idv\n",
+                "        done\n",
+                "        \n",
+                "        sed -i -e 's/ system-python$/ python/' ",
+                               "-e '/^Requires:.*pystache/s/^.*$",
+                                   "/Requires: pystache/' ",
+                           "aws-cfn-bootstrap.spec\n",
+                "        \n",
+                "        sed -i -e '/define\\s_python_version/s/$/\\n%define ",
+                           "pyvershort py2.7/' ",
+                           "-e '/^BuildRequires/s/system-python/python/' ",
+                           "-e '/\\.egg-info/s/%{version}/&-%{pyvershort}/' ",
+                           "aws-cli-plugin-cloudwatch-logs.spec\n",
+                "        \n",
+                "        sed -i -e 's/ system-python$/ python/' ",
+                           "-e 's/%ghost/& %attr(600,root,root)/' ",
+                           "awslogs.spec\n",
+                "        \n",
+                "        mv *.gz ../SOURCES\n",
+                "        rpmbuild -ba aws-cfn-bootstrap.spec\n",
+                "        \n",
+                "        # These are not EL7-compatible (skipping)\n",
+                "        # rpmbuild -ba aws-cli-plugin-cloudwatch-logs.spec\n",
+                "        # rpmbuild -ba awslogs.spec\n",
+                "        aws s3 sync ${HOME}/rpmbuild/RPMS/noarch/ ",
+                         "s3://",
+                {
+                  "Ref": "RpmBucket"
+                },
+                                  "/RPMS/el7/\n",
+                "    permissions: '0755'\n",
+                "    owner: root:root\n",
+                "\n",
+                "runcmd:\n",
+                "  - for USER in $(awk -F\":\" '$3 >= 1000 {print $1}' ",
+                       "/etc/passwd); do mkdir -p ",
+                       "/home/${USER}/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,",
+                       "SRPMS}; (echo '%_topdir %(echo ${HOME})/rpmbuild' ; ",
+                                "echo '%dist .el7' ; ",
+                                "echo '%sys_python_pkg python' ; ",
+                                "echo '%__sys_python python' ;",
+                                "echo '%_sys_python_sitelib ",
+                                "/usr/lib/python2.7/site-packages') > ",
+                       "/home/${USER}/.rpmmacros; chown -R ${USER}:${USER} ",
+                       "/home/${USER}; done\n",
+                "  - yum --disablerepo=* --enablerepo=base,updates,extras",
+                      " install -y vim-enhanced dos2unix python2-mock",
+                      " python-devel python-nose ant lg4j @development\n",
+                "  - yum --disablerepo=* --enablerepo=base,updates,extras",
+                      " update -y\n",
+                "  - test -d /usr/local/src || mkdir /usr/local/src\n",
+                "  - cd /usr/local/src\n",
+                "  - aws s3 sync s3://",
+                {
+                  "Ref": "RpmBucket"
+                },
+                                      "/SRPMS .\n",
+                "  - su - ",
+                {
+                  "Ref": "LoginUser"
+                },
+                        " -c /usr/local/bin/buildem.sh\n",
+                ""
+              ]
+            ]
+          }
+        }
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+        }
+      }
+    }
+  }
+}

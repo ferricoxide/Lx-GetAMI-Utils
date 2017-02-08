@@ -1,0 +1,9 @@
+EL6:
+sed -i -e '/define\s_python_version/s/$/\n%define pyvershort py2.6/' \
+       -e '/^BuildRequires/s/system-python/python/' \
+       -e '/\.egg-info/s/%{version}/&-%{pyvershort}/' aws-cli-plugin-cloudwatch-logs.spec
+
+EL7:
+sed -i -e '/define\s_python_version/s/$/\n%define pyvershort py2.7/' \
+       -e '/^BuildRequires/s/system-python/python/' \
+       -e '/\.egg-info/s/%{version}/&-%{pyvershort}/' aws-cli-plugin-cloudwatch-logs.spec
