@@ -1,0 +1,231 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This template deploys an EL6 with RPM packaging tools pre-installed",
+  "Parameters": {
+    "AmiId": {
+      "Description": "ID of the AMI to launch",
+      "ConstraintDescription": "All ID's must start 'ami-' followed by an 8- to 17-character alphanumeric string.",
+      "Type": "String",
+      "AllowedPattern": "^ami-[0-9a-z]{8}$|^ami-[0-9a-z]{17}$"
+    },
+    "InstanceRole" : {
+      "Description" : "IAM instance role to apply to the instance(s)",
+      "Type" : "String",
+      "Default" : ""
+    },
+    "NoPublicIp": {
+      "Description": "Controls whether to assign the instance a public IP.",
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "NoReboot": {
+      "Description": "Controls whether to reboot the instance as the last step of cfn-init execution",
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "RootEBSsize": {
+      "Description": "Select size of root EBS volume (in GiB)",
+      "ConstraintDescription": "A numeric value between '8' and '50'.",
+      "Type": "Number",
+      "Default": "8",
+      "MinValue": "8",
+      "MaxValue": "50"
+    },
+    "RpmBucket": {
+      "Description": "Name of the Bucket for fetching/stowing RPMs",
+      "ConstraintDescription": "All characters must be legal DNS characters",
+      "Type": "String",
+      "AllowedPattern": "^[0-9a-z-]{4,48}$"
+    },
+    "SecurityGroupIds": {
+      "Description": "List of security groups to apply to the instance(s)",
+      "Type": "List<AWS::EC2::SecurityGroup::Id>"
+    },
+    "SubnetIds": {
+      "Type": "String",
+      "Description": "Subnet to associate to the Instance"
+    }
+  },
+  "Conditions": {
+    "AssignInstanceRole" :
+    {
+      "Fn::Not" : [
+        {
+          "Fn::Equals" : [
+            {
+              "Ref" : "InstanceRole"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "Reboot": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "NoReboot"
+            },
+            "true"
+          ]
+        }
+      ]
+    },
+    "AssignPublicIp": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "NoPublicIp"
+            },
+            "true"
+          ]
+        }
+      ]
+    }
+  },
+  "Mappings": {
+    "Distro2RootDevice": {
+      "RedHat": {
+        "DeviceName": "sda1"
+      },
+      "CentOS": {
+        "DeviceName": "sda1"
+      }
+    }
+  },
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "EC2 Instance Configuration"
+          },
+          "Parameters": [
+            "AmiId",
+            "InstanceRole",
+            "NoReboot",
+            "RootEBSsize",
+            "RpmBucket"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "SubnetIds",
+            "SecurityGroupIds",
+            "NoPublicIp"
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "ValidationInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": "t2.micro",
+        "IamInstanceProfile" : {
+          "Fn::If" : [
+            "AssignInstanceRole",
+            { "Ref" : "InstanceRole" },
+            { "Ref" : "AWS::NoValue" }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeType": "gp2",
+              "VolumeSize" : {
+                "Ref": "RootEBSsize"
+              },
+              "DeleteOnTermination": "true"
+            }
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "DeviceIndex": "0",
+            "AssociatePublicIpAddress": {
+              "Fn::If": [
+                "AssignPublicIp",
+                "true",
+                "false"
+              ]
+            },
+            "GroupSet": {
+              "Ref": "SecurityGroupIds"
+            },
+            "SubnetId": {
+              "Ref": "SubnetIds"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#cloud-config\n",
+                "\n",
+                "package_upgrade: true\n",
+                "\n",
+                "runcmd:\n",
+                "  - yum install -y ec2* aws*\n",
+                "  - |-\n",
+                "        \n",
+                "        # Download the SRPMs for all installed Amzn RPMs\n",
+                "        for SRPM in $(rpm -qa ec2* aws* --qf '%{name}\\n')\n",
+                "        do\n",
+                "           echo yes | get_reference_source -p ${SRPM}\n",
+                "        done\n",
+                "        \n",
+                "        # Load any new SRPMs to the S3 bukkit\n",
+                "        aws s3 sync /usr/src/srpm/debug/ ",
+                           "s3://",
+                {
+                  "Ref": "RpmBucket"
+                },
+                             "/SRPMS/\n"
+              ]
+            ]
+          }
+        }
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+        }
+      }
+    }
+  }
+}
