@@ -89,7 +89,7 @@ yum install -y @development
                             sh '''#!/bin/bash
                                 SUBNET="$( cut -d ';' -f 1 BuildInfo.txt )"
                                 IMAGEID="$( cut -d ';' -f 2 BuildInfo.txt )"
-                                aws --region ${AwsRegion} ec2 run-instances --instance-type t3.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/amzn-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} > amzn1-build.json
+                                aws --region ${AwsRegion} ec2 run-instances --instance-type t3.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/amzn-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=SRPM Fetcher}]" > amzn1-build.json
                             '''
                         }
                     },
@@ -103,12 +103,11 @@ yum install -y @development
                             sh '''#!/bin/bash
                                 SUBNET="$( cut -d ';' -f 1 BuildInfo.txt )"
                                 IMAGEID="$( cut -d ';' -f 3 BuildInfo.txt )"
-                                aws --region ${AwsRegion} ec2 run-instances --instance-type t3.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/amzn-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} > amzn2-build.json
+                                aws --region ${AwsRegion} ec2 run-instances --instance-type t3.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/amzn-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=SRPM Fetcher}]" > amzn2-build.json
                             '''
                         }
                     }
                 )
-
             }
         }
         stage ('Builder Hosts') {
@@ -124,7 +123,7 @@ yum install -y @development
                             sh '''#!/bin/bash
                                 SUBNET="$( cut -d ';' -f 1 BuildInfo.txt )"
                                 IMAGEID="$( cut -d ';' -f 4 BuildInfo.txt )"
-                                aws --region ${AwsRegion} ec2 run-instances --instance-type t2.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/spel-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} > spel6-build.json
+                                aws --region ${AwsRegion} ec2 run-instances --instance-type t2.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/spel-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=RPM Builder}]" > spel6-build.json
                             '''
                         }
                     },
@@ -138,7 +137,7 @@ yum install -y @development
                             sh '''#!/bin/bash
                                 SUBNET="$( cut -d ';' -f 1 BuildInfo.txt )"
                                 IMAGEID="$( cut -d ';' -f 5 BuildInfo.txt )"
-                                aws --region ${AwsRegion} ec2 run-instances --instance-type t3.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/spel-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} > spel7-build.json
+                                aws --region ${AwsRegion} ec2 run-instances --instance-type t3.micro --subnet-id \${SUBNET} --image-id \${IMAGEID} --user-data file:///tmp/spel-userdata.txt --key-name ${AwsProvkeyName} --security-group-ids ${AwsSecurityGroups} --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=RPM Builder}]" > spel7-build.json
                             '''
                         }
                     }
