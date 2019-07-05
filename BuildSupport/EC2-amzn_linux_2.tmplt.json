@@ -78,12 +78,6 @@
     },
     "Resources": {
         "SrpmFetcher": {
-            "CreationPolicy": {
-                "ResourceSignal": {
-                    "Count": "1",
-                    "Timeout": "PT15M"
-                }
-            },
             "Properties": {
                 "BlockDeviceMappings": [
                     {
@@ -191,18 +185,9 @@
                                 "# Ensure everything is up to date\n",
                                 "yum update -y\n",
                                 "\n",
-                                "# Install all available \"amazon\" RPMs\n",
-                                "yum install -y amazon* -x amazon-linux-onprem \n",
-                                "\n",
-                                "# Install all available \"aws\" RPMs\n",
-                                "yum install -y aws*\n",
-                                "\n",
-                                "# Install all available \"ec2\" RPMs\n",
-                                "yum install -y ec2*\n",
-                                "\n",
-                                "# Download the source-RPMs for the above\n",
+                                "# Download all Amazon utility source-RPMs\n",
                                 "cd /var/tmp\n",
-                                "yumdownloader --source $( ( \n",
+                                "yumdownloader --source $( ( ",
                                 "yum list installed amazon\\* aws\\* ec2\\* 2> /dev/null ;",
                                 "yum list available amazon\\* aws\\* ec2\\* 2> /dev/null ",
                                 ") |sed -e '/^[A-Z]/d' -e 's/\\..*$//' )\n",
