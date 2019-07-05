@@ -1,0 +1,221 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Conditions": {
+        "AssignInstanceRole": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "InstanceRoleProfile"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "UseKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Description": "Deploy Amazon Linux EC2 to fetch Amazon utility source RPMs",
+    "Mappings": {},
+    "Metadata": {},
+    "Outputs": {},
+    "Parameters": {
+        "AmiId": {
+            "Description": "ID of the AMI to launch",
+            "Type": "AWS::EC2::Image::Id"
+        },
+        "InstanceRoleName": {
+            "Default": "",
+            "Description": "(Optional) IAM instance role to apply to the instance",
+            "Type": "String"
+        },
+        "InstanceRoleProfile": {
+            "Default": "",
+            "Description": "(Optional) IAM instance-role profile to apply to the instance(s)",
+            "Type": "String"
+        },
+        "InstanceType": {
+            "AllowedValues": [
+                "t2.micro",
+                "t2.small",
+                "t2.large",
+                "t3.micro",
+                "t3.small",
+                "t3.large"
+            ],
+            "Default": "t3.micro",
+            "Description": "Amazon EC2 instance type",
+            "Type": "String"
+        },
+        "KeyPairName": {
+            "Description": "Public/private key pairs allow you to securely connect to your instance after it launches",
+            "Type": "String"
+        },
+        "SecurityGroupIds": {
+            "Description": "List of security groups to apply to the instance",
+            "Type": "List<AWS::EC2::SecurityGroup::Id>"
+        },
+        "StagingBucket": {
+            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]*$|^$",
+            "Description": "S3 Bucket to host backups of GitLab config- and app-data",
+            "Type": "String"
+        },
+        "SubnetId": {
+            "Description": "ID of the subnet to assign to the instance",
+            "Type": "AWS::EC2::Subnet::Id"
+        }
+    },
+    "Resources": {
+        "SrpmFetcher": {
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Count": "1",
+                    "Timeout": "PT15M"
+                }
+            },
+            "Properties": {
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "DeleteOnTermination": true,
+                            "VolumeSize": "10",
+                            "VolumeType": "gp2"
+                        }
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Fn::If": [
+                        "AssignInstanceRole",
+                        {
+                            "Ref": "InstanceRoleProfile"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "ImageId": {
+                    "Ref": "AmiId"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Fn::If": [
+                        "UseKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": false,
+                        "DeviceIndex": "0",
+                        "GroupSet": {
+                            "Ref": "SecurityGroupIds"
+                        },
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    {
+                                        "Ref": "AWS::StackName"
+                                    }
+                                ]
+                            ]
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "Content-Type: multipart/mixed; boundary=\"===============3585321300151562773==\"\n",
+                                "MIME-Version: 1.0\n",
+                                "\n",
+                                "--===============3585321300151562773==\n",
+                                "Content-Type: text/cloud-config; charset=\"us-ascii\"\n",
+                                "MIME-Version: 1.0\n",
+                                "Content-Transfer-Encoding: 7bit\n",
+                                "Content-Disposition: attachment; filename=\"cloud.cfg\"\n",
+                                "\n",
+                                "#cloud-config\n",
+                                "\n",
+                                "growpart:\n",
+                                "  mode: auto\n",
+                                "  devices: [ '/dev/xvda', '/dev/xvda2', '/dev/nvme0n1', '/dev/nvme0n1p1', '/dev/nvme0n1p2' ]\n",
+                                "  ignore_growroot_disabled: false\n",
+                                "\n",
+                                "--===============3585321300151562773==\n",
+                                "Content-Type: text/x-shellscript; charset=\"us-ascii\"\n",
+                                "MIME-Version: 1.0\n",
+                                "Content-Transfer-Encoding: 7bit\n",
+                                "Content-Disposition: attachment; filename=\"script.sh\"\n",
+                                "\n",
+                                "#!/bin/bash -xe\n\n",
+                                "\n",
+                                "# Export AWS ENVs\n",
+                                "test -r /etc/aws/models/endpoints.json && export AWS_DATA_PATH=/etc/aws/models || true\n",
+                                "export AWS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt\n",
+                                "export REQUESTS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt\n",
+                                "export AWS_DEFAULT_REGION=",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "\n\n",
+                                "# Ensure everything is up to date\n",
+                                "yum update -y\n",
+                                "\n",
+                                "# Install all available \"amazon\" RPMs\n",
+                                "yum install -y amazon* -x amazon-linux-onprem \n",
+                                "\n",
+                                "# Install all available \"aws\" RPMs\n",
+                                "yum install -y aws*\n",
+                                "\n",
+                                "# Install all available \"ec2\" RPMs\n",
+                                "yum install -y ec2*\n",
+                                "\n",
+                                "# Download the source-RPMs for the above\n",
+                                "cd /var/tmp\n",
+                                "yumdownloader --source $( ( \n",
+                                "yum list installed amazon\\* aws\\* ec2\\* 2> /dev/null ;",
+                                "yum list available amazon\\* aws\\* ec2\\* 2> /dev/null ",
+                                ") |sed -e '/^[A-Z]/d' -e 's/\\..*$//' )\n",
+                                "\n",
+                                "chmod a+r /var/tmp/*.rpm\n",
+                                "\n",
+                                "--===============3585321300151562773==--"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "Type": "AWS::EC2::Instance"
+        }
+    }
+}
