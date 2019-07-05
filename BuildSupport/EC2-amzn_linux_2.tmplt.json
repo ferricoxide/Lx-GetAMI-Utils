@@ -186,13 +186,18 @@
                                 "yum update -y\n",
                                 "\n",
                                 "# Download all Amazon utility source-RPMs\n",
-                                "cd /var/tmp\n",
+                                "install -Ddm 000755 /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" \n",
+                                "cd /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" \n",
                                 "yumdownloader --source $( ( ",
                                 "yum list installed amazon\\* aws\\* ec2\\* 2> /dev/null ;",
                                 "yum list available amazon\\* aws\\* ec2\\* 2> /dev/null ",
                                 ") |sed -e '/^[A-Z]/d' -e 's/\\..*$//' )\n",
                                 "\n",
-                                "chmod a+r /var/tmp/*.rpm\n",
+                                "aws s3 sync /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" s3://",
+                                {
+                                    "Ref": "StagingBucket"
+                                },
+                                "/SRPMs-\"$( date \"+%Y%m%d\" )\"/\n",
                                 "\n",
                                 "--===============3585321300151562773==--"
                             ]
