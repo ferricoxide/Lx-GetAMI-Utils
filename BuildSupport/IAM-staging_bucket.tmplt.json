@@ -1,90 +1,126 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "This template sets up the IAM role to support RPM staging-activities",
+  "Outputs": {
+    "InstanceRole": {
+      "Description": "Name of the instance role",
+      "Value": {
+        "Ref": "InstanceRole"
+      }
+    },
+    "InstanceRoleArn": {
+      "Description": "ARN of the instance role",
+      "Value": {
+        "Fn::GetAtt": [
+          "InstanceRole",
+          "Arn"
+        ]
+      }
+    },
+    "InstanceRoleProfile": {
+      "Description": "Profile of the instance role",
+      "Value": {
+        "Ref": "InstanceProfile"
+      }
+    }
+  },
   "Parameters": {
     "StagingBucket": {
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]*$",
       "Description": "S3 Bucket to host RPM file-staging",
-      "Type": "String",
-      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]*$"
+      "Type": "String"
     }
   },
   "Resources": {
-    "InstancePolicy" : {
-      "Type": "AWS::IAM::ManagedPolicy",
+    "InstancePolicy": {
       "Properties": {
-        "Description" : "Policy to provide instance-level access to needed AWS-level resources",
-        "Path" : "/",
+        "Description": "Policy to provide instance-level access to needed AWS-level resources",
+        "Path": "/",
         "PolicyDocument": {
-          "Version" : "2012-10-17",
           "Statement": [
             {
-              "Effect": "Allow",
               "Action": [
                 "s3:*"
               ],
+              "Effect": "Allow",
               "Resource": [
-                { "Fn::Join" : [ "", [
-                  "arn:aws:s3:::",
-                    { "Ref" : "StagingBucket" },
-                    ""
-                ]]},
-                { "Fn::Join" : [ "", [
-                  "arn:aws:s3:::",
-                    { "Ref" : "StagingBucket" },
-                    "/*"
-                ]]}
-              ]
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3:::",
+                      {
+                        "Ref": "StagingBucket"
+                      },
+                      ""
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3:::",
+                      {
+                        "Ref": "StagingBucket"
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ],
+              "Sid": "StagingAccess"
             },
             {
-              "Effect": "Allow",
               "Action": [
-                "cloudformation:DescribeStackResource"
+                "cloudformation:DescribeStackResource",
+                "cloudformation:SignalResource"
               ],
+              "Effect": "Allow",
               "Resource": [
                 "*"
-              ]
+              ],
+              "Sid": "CfnAccess"
             }
-          ]
+          ],
+          "Version": "2012-10-17"
         },
-        "Roles": [{ "Ref" : "InstanceRole" }]
-      }
-    },
-    "InstanceRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [{
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": {
-              "Service": "ec2.amazonaws.com"
-            }
-          }]
-        },
-        "Path": "/"
-      }
+        "Roles": [
+          {
+            "Ref": "InstanceRole"
+          }
+        ]
+      },
+      "Type": "AWS::IAM::ManagedPolicy"
     },
     "InstanceProfile": {
-      "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "Path": "/",
-        "Roles": [ { "Ref" : "InstanceRole" } ]
-      }
-    }
-  },
-  "Outputs": {
+        "Roles": [
+          {
+            "Ref": "InstanceRole"
+          }
+        ]
+      },
+      "Type": "AWS::IAM::InstanceProfile"
+    },
     "InstanceRole": {
-      "Value": { "Ref" : "InstanceRole" },
-      "Description" : "Name of the instance role"
-    },
-    "InstanceRoleProfile" : {
-      "Value":  { "Ref" : "InstanceProfile" },
-      "Description" : "Profile of the instance role"
-    },
-    "InstanceRoleArn" : {
-      "Value": { "Fn::GetAtt" : [ "InstanceRole", "Arn" ] },
-      "Description" : "ARN of the instance role"
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Path": "/"
+      },
+      "Type": "AWS::IAM::Role"
     }
   }
 }
