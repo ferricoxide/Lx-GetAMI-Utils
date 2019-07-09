@@ -78,6 +78,192 @@
     },
     "Resources": {
         "RpmBuilder": {
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Count": "1",
+                    "Timeout": "PT30M"
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "AddOnRpms": {
+                        "commands": {
+                            "1-development-rpms": {
+                                "command": "yum install -y @development"
+                            },
+                            "2-epel-rpms": {
+                                "command": "yum install -y --enablerepo=epel ${PYTHON3} ${PYTHON3}-dateutil golang"
+                            },
+                            "3-misc-rpms": {
+                                "command": "yum install -y acpid rpmdevtools rpmlint python2-devel pytest dos2unix"
+                            }
+                        }
+                    },
+                    "BuildRpms": {
+                        "commands": {
+                            "1-build-rpms": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cd \"${STAGEDIR}\"/rpmbuild && ",
+                                            "for SPEC in SPECS/*.spec ; ",
+                                            "do rpmbuild --define \"_topdir $( pwd )\" ",
+                                            "-ba \"${SPEC}\" && touch \"${SPEC}.built\" ; done"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "FetchSrpms": {
+                        "commands": {
+                            "1-create-workdir": {
+                                "command": "install -Ddm 000755 \"${STAGEDIR}\""
+                            },
+                            "2-snarf-srpms": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cd \"${STAGEDIR}\" && ",
+                                            "aws s3 sync s3://",
+                                            {
+                                                "Ref": "StagingBucket"
+                                            },
+                                            "/RPMbuild/SRPMs-\"${DATESTR}\"/ ",
+                                            "\"${STAGEDIR}\"/"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "SetupBuildRoot": {
+                        "commands": {
+                            "1-create-buildroot": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cd \"${STAGEDIR}\"/ && ",
+                                            "rpmdev-setuptree &&",
+                                            "mv /rpmbuild ."
+                                        ]
+                                    ]
+                                }
+                            },
+                            "2-dearchive-srpms": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cd \"${STAGEDIR}\"/rpmbuild/SOURCES && ",
+                                            "for SRPM in ../../*.src.rpm ; do rpm2cpio $SRPM | cpio -idv ; done && ",
+                                            "mv *.spec ../SPECS"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "StageRpms": {
+                        "commands": {
+                            "1-copy-to-s3": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cd \"${STAGEDIR}\"/rpmbuild && ",
+                                            "aws s3 sync RPMS/ s3://",
+                                            {
+                                                "Ref": "StagingBucket"
+                                            },
+                                            "/RPMbuild/UnsignedRPMs-\"${DATESTR}\"/"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "UpdateHost": {
+                        "commands": {
+                            "1-update-rpms": {
+                                "command": "yum update -y"
+                            }
+                        }
+                    },
+                    "configSets": {
+                        "launch": [
+                            "UpdateHost",
+                            "AddOnRpms",
+                            "FetchSrpms",
+                            "SetupBuildRoot",
+                            "BuildRpms",
+                            "StageRpms",
+                            "finalize"
+                        ]
+                    },
+                    "finalize": {
+                        "commands": {
+                            "10-signal-success": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cfn-signal -e 0",
+                                            " --stack ",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            " --resource RpmBuilder",
+                                            {
+                                                "Fn::If": [
+                                                    "AssignInstanceRole",
+                                                    {
+                                                        "Fn::Join": [
+                                                            "",
+                                                            [
+                                                                " --role ",
+                                                                {
+                                                                    "Ref": "InstanceRoleName"
+                                                                }
+                                                            ]
+                                                        ]
+                                                    },
+                                                    ""
+                                                ]
+                                            },
+                                            {
+                                                "Fn::Join": [
+                                                    "",
+                                                    [
+                                                        " --url ",
+                                                        "https://cloudformation.",
+                                                        {
+                                                            "Ref": "AWS::Region"
+                                                        },
+                                                        ".",
+                                                        {
+                                                            "Ref": "AWS::URLSuffix"
+                                                        }
+                                                    ]
+                                                ]
+                                            },
+                                            " --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "ignoreErrors": "true"
+                            }
+                        }
+                    }
+                }
+            },
             "Properties": {
                 "BlockDeviceMappings": [
                     {
@@ -173,7 +359,10 @@
                                 "\n",
                                 "#!/bin/bash -xe\n\n",
                                 "# Set up some misc. vars\n",
+                                "export PATH=\"${PATH}\":/opt/aws/bin/\n",
                                 "export PYTHON3=python36\n",
+                                "export DATESTR=\"$( date \"+%Y%m%d\" )\"\n",
+                                "export STAGEDIR=/var/tmp/SRPMs-\"${DATESTR}\"\n",
                                 "\n",
                                 "# Setup terminal support for UTF-8\n",
                                 "export LC_ALL=en_US.UTF-8\n",
@@ -188,51 +377,103 @@
                                     "Ref": "AWS::Region"
                                 },
                                 "\n\n",
-                                "# Ensure everything is up to date\n",
-                                "yum update -y\n",
-                                "\n",
-                                "# Install developer tools and other necessary RPMs\n",
-                                "yum install -y @development\n",
-                                "yum install -y --enablerepo=epel ${PYTHON3} ${PYTHON3}-dateutil golang\n",
-                                "yum install -y acpid rpmdevtools rpmlint python2-devel pytest dos2unix\n",
-                                "\n",
                                 "# Try to build things with Python3\n",
                                 "python3 -m ensurepip --upgrade --default-pip\n",
                                 "pip install --upgrade pip setuptools\n",
                                 "pip install --upgrade boto3\n",
                                 "\n",
-                                "# Install developer tools and other necessary RPMs\n",
-                                "# Download all Amazon utility source-RPMs\n",
-                                "install -Ddm 000755 /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" \n",
-                                "cd /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" \n",
-                                "aws s3 sync s3://",
+                                "# Execute cfn-init\n",
+                                "cfn-init -v -c launch",
+                                " --stack ",
                                 {
-                                    "Ref": "StagingBucket"
+                                    "Ref": "AWS::StackName"
                                 },
-                                "/RPMbuild/SRPMs-\"$( date \"+%Y%m%d\" )\"/ ",
-                                "/var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\"/ \n",
-                                "\n",
-                                "# Set up buildroot\n",
-                                "rpmdev-setuptree\n",
-                                "mv /rpmbuild . \n",
-                                "cd rpmbuild/SOURCES/\n",
-                                "for SRPM in ../../*.src.rpm; do rpm2cpio $SRPM | cpio -idv; done\n",
-                                "mv *.spec ../SPECS\n",
-                                "\n",
-                                "# Build binary RPMs\n",
-                                "cd ..\n",
-                                "for SPEC in SPECS/*.spec\n",
-                                "do\n",
-                                "   rpmbuild --define \"_topdir $( pwd )\" -ba \"${SPEC}\" && ",
-                                "touch \"${SPEC}.built\"\n",
-                                "done\n",
-                                "\n",
-                                "# Stage unsigned binary RPMs to S3\n",
-                                "aws s3 sync RPMS/ s3://",
+                                " --resource RpmBuilder",
                                 {
-                                    "Ref": "StagingBucket"
+                                    "Fn::If": [
+                                        "AssignInstanceRole",
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    " --role ",
+                                                    {
+                                                        "Ref": "InstanceRoleName"
+                                                    }
+                                                ]
+                                            ]
+                                        },
+                                        ""
+                                    ]
                                 },
-                                "/RPMbuild/UnsignedRPMs-$( date \"+%Y%m%d\" )/\n",
+                                {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            " --url ",
+                                            "https://cloudformation.",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            ".",
+                                            {
+                                                "Ref": "AWS::URLSuffix"
+                                            }
+                                        ]
+                                    ]
+                                },
+                                " --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                " ||",
+                                " ( echo 'ERROR: cfn-init failed! Aborting!';",
+                                " cfn-signal -e 1",
+                                "  --stack ",
+                                {
+                                    "Ref": "AWS::StackName"
+                                },
+                                " --resource RpmBuilder",
+                                {
+                                    "Fn::If": [
+                                        "AssignInstanceRole",
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    " --role ",
+                                                    {
+                                                        "Ref": "InstanceRoleName"
+                                                    }
+                                                ]
+                                            ]
+                                        },
+                                        ""
+                                    ]
+                                },
+                                {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            " --url ",
+                                            "https://cloudformation.",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            ".",
+                                            {
+                                                "Ref": "AWS::URLSuffix"
+                                            }
+                                        ]
+                                    ]
+                                },
+                                "  --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ";",
+                                " exit 1",
+                                " )\n\n",
                                 "\n",
                                 "\n",
                                 "--===============3585321300151562773==--"

@@ -78,6 +78,128 @@
     },
     "Resources": {
         "SrpmFetcher": {
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Count": "1",
+                    "Timeout": "PT30M"
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "DownloadSrpms": {
+                        "commands": {
+                            "1-create-dl-dest": {
+                                "command": "install -Ddm 000755 /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\""
+                            },
+                            "2-grab-srpms": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cd /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" &&",
+                                            "yumdownloader --source $( ( ",
+                                            "yum list installed amazon\\* aws\\* ec2\\* 2> /dev/null ;",
+                                            "yum list available amazon\\* aws\\* ec2\\* 2> /dev/null ",
+                                            ") |sed -e '/^[A-Z]/d' -e 's/\\..*$//' )"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "StageSrpms": {
+                        "commands": {
+                            "1-upload-to-s3": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "aws s3 sync /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" s3://",
+                                            {
+                                                "Ref": "StagingBucket"
+                                            },
+                                            "/RPMbuild/SRPMs-\"$( date \"+%Y%m%d\" )\"/"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "UpdateHost": {
+                        "commands": {
+                            "1-update-rpms": {
+                                "command": "yum update -y"
+                            }
+                        }
+                    },
+                    "configSets": {
+                        "launch": [
+                            "UpdateHost",
+                            "DownloadSrpms",
+                            "StageSrpms",
+                            "finalize"
+                        ]
+                    },
+                    "finalize": {
+                        "commands": {
+                            "10-signal-success": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cfn-signal -e 0",
+                                            " --stack ",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            " --resource SrpmFetcher",
+                                            {
+                                                "Fn::If": [
+                                                    "AssignInstanceRole",
+                                                    {
+                                                        "Fn::Join": [
+                                                            "",
+                                                            [
+                                                                " --role ",
+                                                                {
+                                                                    "Ref": "InstanceRoleName"
+                                                                }
+                                                            ]
+                                                        ]
+                                                    },
+                                                    ""
+                                                ]
+                                            },
+                                            {
+                                                "Fn::Join": [
+                                                    "",
+                                                    [
+                                                        " --url ",
+                                                        "https://cloudformation.",
+                                                        {
+                                                            "Ref": "AWS::Region"
+                                                        },
+                                                        ".",
+                                                        {
+                                                            "Ref": "AWS::URLSuffix"
+                                                        }
+                                                    ]
+                                                ]
+                                            },
+                                            " --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "ignoreErrors": "true"
+                            }
+                        }
+                    }
+                }
+            },
             "Properties": {
                 "BlockDeviceMappings": [
                     {
@@ -173,6 +295,9 @@
                                 "\n",
                                 "#!/bin/bash -xe\n\n",
                                 "\n",
+                                "# Expand binary search-path to include AWS tools\n",
+                                "export PATH=\"${PATH}\":/opt/aws/bin/\n",
+                                "\n",
                                 "# Export AWS ENVs\n",
                                 "test -r /etc/aws/models/endpoints.json && export AWS_DATA_PATH=/etc/aws/models || true\n",
                                 "export AWS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt\n",
@@ -181,23 +306,99 @@
                                 {
                                     "Ref": "AWS::Region"
                                 },
-                                "\n\n",
-                                "# Ensure everything is up to date\n",
-                                "yum update -y\n",
                                 "\n",
-                                "# Download all Amazon utility source-RPMs\n",
-                                "install -Ddm 000755 /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" \n",
-                                "cd /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" \n",
-                                "yumdownloader --source $( ( ",
-                                "yum list installed amazon\\* aws\\* ec2\\* 2> /dev/null ;",
-                                "yum list available amazon\\* aws\\* ec2\\* 2> /dev/null ",
-                                ") |sed -e '/^[A-Z]/d' -e 's/\\..*$//' )\n",
-                                "\n",
-                                "aws s3 sync /var/tmp/SRPMs-\"$( date \"+%Y%m%d\" )\" s3://",
+                                "# Execute cfn-init\n",
+                                "cfn-init -v -c launch",
+                                " --stack ",
                                 {
-                                    "Ref": "StagingBucket"
+                                    "Ref": "AWS::StackName"
                                 },
-                                "/RPMbuild/SRPMs-\"$( date \"+%Y%m%d\" )\"/\n",
+                                " --resource SrpmFetcher",
+                                {
+                                    "Fn::If": [
+                                        "AssignInstanceRole",
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    " --role ",
+                                                    {
+                                                        "Ref": "InstanceRoleName"
+                                                    }
+                                                ]
+                                            ]
+                                        },
+                                        ""
+                                    ]
+                                },
+                                {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            " --url ",
+                                            "https://cloudformation.",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            ".",
+                                            {
+                                                "Ref": "AWS::URLSuffix"
+                                            }
+                                        ]
+                                    ]
+                                },
+                                " --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                " ||",
+                                " ( echo 'ERROR: cfn-init failed! Aborting!';",
+                                " cfn-signal -e 1",
+                                "  --stack ",
+                                {
+                                    "Ref": "AWS::StackName"
+                                },
+                                " --resource SrpmFetcher",
+                                {
+                                    "Fn::If": [
+                                        "AssignInstanceRole",
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    " --role ",
+                                                    {
+                                                        "Ref": "InstanceRoleName"
+                                                    }
+                                                ]
+                                            ]
+                                        },
+                                        ""
+                                    ]
+                                },
+                                {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            " --url ",
+                                            "https://cloudformation.",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            ".",
+                                            {
+                                                "Ref": "AWS::URLSuffix"
+                                            }
+                                        ]
+                                    ]
+                                },
+                                "  --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ";",
+                                " exit 1",
+                                " )\n\n",
                                 "\n",
                                 "--===============3585321300151562773==--"
                             ]
