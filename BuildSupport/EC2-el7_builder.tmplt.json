@@ -13,6 +13,18 @@
                 }
             ]
         },
+        "ForceHostname": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "BuildHostName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
         "UseKeyPair": {
             "Fn::Not": [
                 {
@@ -34,6 +46,11 @@
         "AmiId": {
             "Description": "ID of the AMI to launch",
             "Type": "AWS::EC2::Image::Id"
+        },
+        "BuildHostName": {
+            "Default": "",
+            "Description": "(Optional) Hostname to assign to instance (that will appear in RPMs' \"buildhost\" tag)",
+            "Type": "String"
         },
         "InstanceRoleName": {
             "Default": "",
@@ -346,6 +363,26 @@
                                 "\n",
                                 "#cloud-config\n",
                                 "\n",
+                                {
+                                    "Fn::If": [
+                                        "ForceHostname",
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "hostname: ",
+                                                    {
+                                                        "Ref": "BuildHostName"
+                                                    },
+                                                    "\n"
+                                                ]
+                                            ]
+                                        },
+                                        {
+                                            "Ref": "AWS::NoValue"
+                                        }
+                                    ]
+                                },
                                 "growpart:\n",
                                 "  mode: auto\n",
                                 "  devices: [ '/dev/xvda', '/dev/xvda2', '/dev/nvme0n1', '/dev/nvme0n1p1', '/dev/nvme0n1p2' ]\n",

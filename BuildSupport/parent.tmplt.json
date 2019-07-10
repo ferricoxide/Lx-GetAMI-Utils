@@ -7,6 +7,11 @@
             "Description": "ID of the Amazon Linux 2 AMI to launch",
             "Type": "AWS::EC2::Image::Id"
         },
+        "BuildHostName": {
+            "Default": "",
+            "Description": "(Optional) Hostname to assign to instance (that will appear in RPMs' \"buildhost\" tag)",
+            "Type": "String"
+        },
         "BuilderTmpltUrl": {
             "AllowedPattern": "^$|^http://.*$|^https://.*$",
             "Description": "URL of S3-hosted template used to launch RPM builder EC2 instance",
@@ -78,6 +83,9 @@
                 "Parameters": {
                     "AmiId": {
                         "Ref": "EL7AmiId"
+                    },
+                    "BuildHostName": {
+                        "Ref": "BuildHostName"
                     },
                     "InstanceRoleName": {
                         "Fn::GetAtt": [
