@@ -1,0 +1,7 @@
+%_gpgbin /usr/bin/gpg
+%_gpg_bin /usr/bin/gpg
+%_gpg_path %(echo $HOME)/.gnupg
+%_gpg_name <KEY_NAME_OR_ID>
+%_signature gpg
+%__gpg_sign_cmd %{__gpg} gpg --batch --verbose --no-armor --passphrase-fd 3 --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}'
+
