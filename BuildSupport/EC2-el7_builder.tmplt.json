@@ -167,7 +167,7 @@
                                             "curl -OkL \"${SSMAGENTURL}\" && ",
                                             "mv amazon-ssm-agent.rpm $( ",
                                             "rpm -qp amazon-ssm-agent.rpm ",
-                                            "--qf '%{name}-%{version}.%{arch}.rpm' )"
+                                            "--qf '%{name}-%{version}-%{release}.el7.%{arch}.rpm' )"
                                         ]
                                     ]
                                 }
