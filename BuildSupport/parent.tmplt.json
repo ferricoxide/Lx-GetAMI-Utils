@@ -1,0 +1,177 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This template coordinates the running of the Lx-GetAMI-Utils IAM and EC2 templates.",
+    "Metadata": {},
+    "Parameters": {
+        "AmazonAmiId": {
+            "Description": "ID of the Amazon Linux 2 AMI to launch",
+            "Type": "AWS::EC2::Image::Id"
+        },
+        "BuildHostName": {
+            "Default": "",
+            "Description": "(Optional) Hostname to assign to instance (that will appear in RPMs' \"buildhost\" tag)",
+            "Type": "String"
+        },
+        "BuilderTmpltUrl": {
+            "AllowedPattern": "^$|^http://.*$|^https://.*$",
+            "Description": "URL of S3-hosted template used to launch RPM builder EC2 instance",
+            "Type": "String"
+        },
+        "EL7AmiId": {
+            "Description": "ID of the EL7 AMI to launch",
+            "Type": "AWS::EC2::Image::Id"
+        },
+        "FetcherTmpltUrl": {
+            "AllowedPattern": "^$|^http://.*$|^https://.*$",
+            "Description": "URL of S3-hosted template used to launch SRPM fetcher EC2 instance",
+            "Type": "String"
+        },
+        "IamTmpltUrl": {
+            "AllowedPattern": "^$|^http://.*$|^https://.*$",
+            "Description": "URL of S3-hosted template used to create IAM roles for launched EC2 instances",
+            "Type": "String"
+        },
+        "InstanceType": {
+            "AllowedValues": [
+                "t2.micro",
+                "t2.small",
+                "t2.large",
+                "t3.micro",
+                "t3.small",
+                "t3.large"
+            ],
+            "Default": "t3.micro",
+            "Description": "EL7 EC2 instance type",
+            "Type": "String"
+        },
+        "KeyPairName": {
+            "Description": "Public/private key pairs allow secure connection to instances after each launches",
+            "Type": "String"
+        },
+        "SecurityGroupIds": {
+            "Description": "List of security groups to apply to launched instances",
+            "Type": "List<AWS::EC2::SecurityGroup::Id>"
+        },
+        "StagingBucket": {
+            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]*$|^$",
+            "Description": "S3 Bucket stage SRPMs and unsigned-RPMs to",
+            "Type": "String"
+        },
+        "SubnetId": {
+            "Description": "ID of the subnet to assign to the instance",
+            "Type": "AWS::EC2::Subnet::Id"
+        }
+    },
+    "Resources": {
+        "IamRes": {
+            "Properties": {
+                "Parameters": {
+                    "StagingBucket": {
+                        "Ref": "StagingBucket"
+                    }
+                },
+                "TemplateURL": {
+                    "Ref": "IamTmpltUrl"
+                },
+                "TimeoutInMinutes": 10
+            },
+            "Type": "AWS::CloudFormation::Stack"
+        },
+        "RpmBuildererRes": {
+            "DependsOn": "SrpmFetcherRes",
+            "Properties": {
+                "Parameters": {
+                    "AmiId": {
+                        "Ref": "EL7AmiId"
+                    },
+                    "BuildHostName": {
+                        "Ref": "BuildHostName"
+                    },
+                    "InstanceRoleName": {
+                        "Fn::GetAtt": [
+                            "IamRes",
+                            "Outputs.InstanceRole"
+                        ]
+                    },
+                    "InstanceRoleProfile": {
+                        "Fn::GetAtt": [
+                            "IamRes",
+                            "Outputs.InstanceRoleProfile"
+                        ]
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "SecurityGroupIds": {
+                        "Fn::Join": [
+                            ",",
+                            {
+                                "Ref": "SecurityGroupIds"
+                            }
+                        ]
+                    },
+                    "StagingBucket": {
+                        "Ref": "StagingBucket"
+                    },
+                    "SubnetId": {
+                        "Ref": "SubnetId"
+                    }
+                },
+                "TemplateURL": {
+                    "Ref": "BuilderTmpltUrl"
+                },
+                "TimeoutInMinutes": 30
+            },
+            "Type": "AWS::CloudFormation::Stack"
+        },
+        "SrpmFetcherRes": {
+            "Properties": {
+                "Parameters": {
+                    "AmiId": {
+                        "Ref": "AmazonAmiId"
+                    },
+                    "InstanceRoleName": {
+                        "Fn::GetAtt": [
+                            "IamRes",
+                            "Outputs.InstanceRole"
+                        ]
+                    },
+                    "InstanceRoleProfile": {
+                        "Fn::GetAtt": [
+                            "IamRes",
+                            "Outputs.InstanceRoleProfile"
+                        ]
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "SecurityGroupIds": {
+                        "Fn::Join": [
+                            ",",
+                            {
+                                "Ref": "SecurityGroupIds"
+                            }
+                        ]
+                    },
+                    "StagingBucket": {
+                        "Ref": "StagingBucket"
+                    },
+                    "SubnetId": {
+                        "Ref": "SubnetId"
+                    }
+                },
+                "TemplateURL": {
+                    "Ref": "FetcherTmpltUrl"
+                },
+                "TimeoutInMinutes": 15
+            },
+            "Type": "AWS::CloudFormation::Stack"
+        }
+    }
+}
