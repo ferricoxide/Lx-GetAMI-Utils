@@ -156,6 +156,24 @@
                             }
                         }
                     },
+                    "GetLatestSSM": {
+                        "commands": {
+                            "1-fetch-binaryRpm": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "cd \"${STAGEDIR}\"/rpmbuild/RPMS/x86_64 && ",
+                                            "curl -OkL \"${SSMAGENTURL}\" && ",
+                                            "mv amazon-ssm-agent.rpm $( ",
+                                            "rpm -qp amazon-ssm-agent.rpm ",
+                                            "--qf '%{name}-%{version}.%{arch}.rpm' )"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
                     "SetupBuildRoot": {
                         "commands": {
                             "1-create-buildroot": {
@@ -217,6 +235,7 @@
                             "FetchSrpms",
                             "SetupBuildRoot",
                             "BuildRpms",
+                            "GetLatestSSM",
                             "StageRpms",
                             "finalize"
                         ]
@@ -400,6 +419,7 @@
                                 "export PYTHON3=python36\n",
                                 "export DATESTR=\"$( date \"+%Y%m%d\" )\"\n",
                                 "export STAGEDIR=/var/tmp/SRPMs-\"${DATESTR}\"\n",
+                                "export SSMAGENTURL=\"https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm\"\n",
                                 "\n",
                                 "# Setup terminal support for UTF-8\n",
                                 "export LC_ALL=en_US.UTF-8\n",
