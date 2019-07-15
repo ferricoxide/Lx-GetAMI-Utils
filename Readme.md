@@ -53,4 +53,5 @@ To facilitate generating updated RPMs (as they are published), this project incl
 * The `aws-cli` RPM is not relevant to Red Hat or CentOS 6/7. It is recommended to get its functionality via the [install-bundle ZIP](http://docs.aws.amazon.com/cli/latest/userguide/installing.html).
 * Installation of these RPMs will pull in a number of dependences - mostly related to Java, Ruby and X11.
 * When attempting to build or install the RPMs, ensure that the build/install host has appropriate yum repositories enabled to satisfy the pulled-in dependencies.
-
+* RPMs that are known to cause breakage or have (currently) unresolveable dependencies are placed in subdirectories of this project.
+* The RPMs contained in the top-level of this project are SHA2-signed for installation on hosts configured to require signed packages.
