@@ -55,7 +55,7 @@ pipeline {
 
                        UPLOADFILE="\$( stat -c '%n' amazon-ssm-agent*el7.x86_64.rpm )"
 
-                       if [[ $( aws s3 ls s3://cbt-yum/RPMbuild/amazon-ssm-agent/ > /dev/null 2>&1 )$? -eq 0 ]]
+                       if [[ $( aws s3 ls "s3://${StagingBucket}/${UPLOADFILE}" > /dev/null 2>&1 )$? -eq 0 ]]
                        then
                           echo "\${UPLOADFILE} already exists in s3://${StagingBucket}"
                        else
