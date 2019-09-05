@@ -89,6 +89,7 @@ pipeline {
                               --template-body file://BuildSupport/parent.tmplt.json \
                               --parameters file://parent.parms
                         else
+                           touch .no-build
                            echo "Could not find parent.parms file"
                            exit 1
                         fi
@@ -104,6 +105,13 @@ pipeline {
                     ]
                 ) {
                     sh '''#!/bin/bash
+                        # Abort if there was no build
+                        if [[ -f .no-build ]]
+                        then
+                           echo "No stack-creation was successfully started (nothing to do)"
+                           exit
+                        fi
+
                         sleep 15
 
                         # Loop while we wait for stack-create to exit
@@ -130,9 +138,29 @@ pipeline {
                                 )$? -eq 0 ]]
                         then
                            echo "Stack-creation successful"
+                           touch .build-success
                         else
                            echo "Stack-creation ended with non-successful state"
                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+        stage ('Cleanup AWS') {
+            steps {
+                withCredentials(
+                    [
+                        [$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: "${AwsCred}", secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
+                    ]
+                ) {
+                    sh '''#!/bin/bash
+                        if [[ -f .build-success ]]
+                        then
+                           echo "Initiating (fire-and-forget) deletion of stack '${StackRoot}'..."
+                           aws cloudformation delete-stack --stack-name ${StackRoot}
+                        else
+                           echo "Nothing to do."
                         fi
                     '''
                 }
