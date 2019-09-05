@@ -139,4 +139,17 @@ pipeline {
             }
         }
     }
+
+    post {
+        failure {
+            mail to: "${env.NotifyEmail}",
+                subject: "Failed Pipeline: ${currentBuild.fullDisplayName}",
+                body: "Something is wrong with ${env.BUILD_URL}"
+        }
+
+        cleanup {
+            echo "Executing post-job workspace-cleanup"
+            cleanWs()
+        }
+    }
 }
