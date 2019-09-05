@@ -12,7 +12,7 @@ pipeline {
             )
         )
         disableConcurrentBuilds()
-        timeout(time: 15, unit: 'MINUTES')
+        timeout(time: 30, unit: 'MINUTES')
     }
 
     environment {
@@ -49,7 +49,7 @@ pipeline {
                         AMZNAMI="\$( aws ec2 describe-images --owner amazon --filters 'Name=name,Values=amzn2-ami-hvm-2.*-x86_64-gp2' --query 'Images[?CreationDate >= `'\$( date --date="7 days ago" '+%F' )'`].ImageId' --output text )"
 
                         # Ensure there was a recently-published Amazon AMI
-                        if [[ -n ${AMZNAMI} ]]
+                        if [[ -z ${AMZNAMI} ]]
                         then
                            echo "No Amazon Linux 2 AMI pushed within the expected period"
                            exit
