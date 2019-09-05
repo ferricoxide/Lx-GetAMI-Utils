@@ -1,0 +1,46 @@
+[
+    {
+        "ParameterKey": "AmazonAmiId",
+        "ParameterValue": "__AMZN2_AMI__"
+    },
+    {
+        "ParameterKey": "BuildHostName",
+        "ParameterValue": "__BUILDER_HOSTNAME__"
+    },
+    {
+        "ParameterKey": "BuilderTmpltUrl",
+        "ParameterValue": "__BUILDER_TEMPLATE__"
+    },
+    {
+        "ParameterKey": "EL7AmiId",
+        "ParameterValue": "__BUILDER_AMI__"
+    },
+    {
+        "ParameterKey": "FetcherTmpltUrl",
+        "ParameterValue": "__FETCHER_TEMLATE__"
+    },
+    {
+        "ParameterKey": "IamTmpltUrl",
+        "ParameterValue": "__IAM_TEMPLATE__"
+    },
+    {
+        "ParameterKey": "InstanceType",
+        "ParameterValue": "t3.large"
+    },
+    {
+        "ParameterKey": "KeyPairName",
+        "ParameterValue": "__KEYPAIR_NAME__"
+    },
+    {
+        "ParameterKey": "SecurityGroupIds",
+        "ParameterValue": "__SGID__"
+    },
+    {
+        "ParameterKey": "StagingBucket",
+        "ParameterValue": "__BUCKET_NAME__"
+    },
+    {
+        "ParameterKey": "SubnetId",
+        "ParameterValue": "__SUBNET_ID__"
+    }
+]
