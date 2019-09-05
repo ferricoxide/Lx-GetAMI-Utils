@@ -48,6 +48,16 @@ pipeline {
 
                         AMZNAMI="\$( aws ec2 describe-images --owner amazon --filters 'Name=name,Values=amzn2-ami-hvm-2.*-x86_64-gp2' --query 'Images[?CreationDate >= `'\$( date --date="7 days ago" '+%F' )'`].ImageId' --output text )"
 
+                        # Ensure there was a recently-published Amazon AMI
+                        if [[ -n ${AMZNAMI} ]]
+                        then
+                           echo "No Amazon Linux 2 AMI pushed within the expected period"
+                           exit
+                        else
+                           printf "Amazon Linux 2 AMI of expected-recency found"
+                           printf " [%s]. Continuing... \n" "${AMZNAMI}"
+                        fi
+
                         sed -e 's/__AMZN2_AMI__/'"\${AMZNAMI}"'/' \
                             -e 's/__BUILDER_HOSTNAME__/'"${BuilderHostname}"'/'\
                             -e 's/__BUCKET_NAME__/'"${WorkBucket}"'/' \
