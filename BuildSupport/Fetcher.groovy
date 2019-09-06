@@ -71,6 +71,11 @@ pipeline {
                             -e 's/__SGID__/'"${SecurityGroups}"'/'\
                             -e 's/__SUBNET_ID__/'"${Ec2Subnet}"'/' \
                            BuildSupport/parms.json > parent.parms
+
+                        # Delete any blocking stacks
+                        echo "Ensure there's no blocking stacks..."
+                        aws cloudformation delete-stack --stack-name ${StackRoot}
+                        aws cloudformation wait stack-delete-complete --stack-name ${StackRoot}
                     '''
                 }
             }
@@ -159,8 +164,12 @@ pipeline {
                     sh '''#!/bin/bash
                         if [[ -f .build-success ]]
                         then
-                           echo "Initiating (fire-and-forget) deletion of stack '${StackRoot}'..."
+                           echo "Initiating deletion of stack '${StackRoot}'..."
                            aws cloudformation delete-stack --stack-name ${StackRoot}
+
+                           echo "Waiting for deletion of stack '${StackRoot}'..."
+                           aws cloudformation wait stack-delete-complete --stack-name ${StackRoot} \
+                             && echo "Delete succeeded"
                         else
                            echo "Nothing to do."
                         fi
