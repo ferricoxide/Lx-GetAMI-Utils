@@ -81,6 +81,11 @@ pipeline {
             }
         }
         stage ('Launch Stack') {
+            when {
+                expression {
+                    fileExists('parent.parms')
+                }
+            }
             steps {
                 withCredentials(
                     [
@@ -95,8 +100,8 @@ pipeline {
                               --disable-rollback --stack-name ${StackRoot} \
                               --template-body file://BuildSupport/parent.tmplt.json \
                               --parameters file://parent.parms
+                           touch .check-status
                         else
-                           touch .no-build
                            echo "Could not find parent.parms file"
                            exit 1
                         fi
@@ -105,6 +110,11 @@ pipeline {
             }
         }
         stage ('Check Stack Create-Status') {
+            when {
+                expression {
+                    fileExists('.check-status')
+                }
+            }
             steps {
                 withCredentials(
                     [
@@ -112,13 +122,6 @@ pipeline {
                     ]
                 ) {
                     sh '''#!/bin/bash
-                        # Abort if there was no build
-                        if [[ -f .no-build ]]
-                        then
-                           echo "No stack-creation was successfully started (nothing to do)"
-                           exit
-                        fi
-
                         sleep 15
 
                         # Loop while we wait for stack-create to exit
@@ -155,6 +158,11 @@ pipeline {
             }
         }
         stage ('Cleanup AWS') {
+            when {
+                expression {
+                    fileExists('.build-success')
+                }
+            }
             steps {
                 withCredentials(
                     [
@@ -162,17 +170,12 @@ pipeline {
                     ]
                 ) {
                     sh '''#!/bin/bash
-                        if [[ -f .build-success ]]
-                        then
-                           echo "Initiating deletion of stack '${StackRoot}'..."
-                           aws cloudformation delete-stack --stack-name ${StackRoot}
+                        echo "Initiating deletion of stack '${StackRoot}'..."
+                        aws cloudformation delete-stack --stack-name ${StackRoot}
 
-                           echo "Waiting for deletion of stack '${StackRoot}'..."
-                           aws cloudformation wait stack-delete-complete --stack-name ${StackRoot} \
-                             && echo "Delete succeeded"
-                        else
-                           echo "Nothing to do."
-                        fi
+                        echo "Waiting for deletion of stack '${StackRoot}'..."
+                        aws cloudformation wait stack-delete-complete --stack-name ${StackRoot} \
+                          && echo "Delete succeeded"
                     '''
                 }
             }
