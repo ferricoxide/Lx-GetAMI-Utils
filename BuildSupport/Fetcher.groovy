@@ -16,12 +16,14 @@ pipeline {
     }
 
     environment {
+        CheckHorizon = 7
         AWS_DEFAULT_REGION = "${AwsRegion}"
         AWS_CA_BUNDLE = '/etc/pki/tls/certs/ca-bundle.crt'
         REQUESTS_CA_BUNDLE = '/etc/pki/tls/certs/ca-bundle.crt'
     }
 
     parameters {
+        string(name: 'NotifyEmail', description: 'Email-recipient for job-status notifications')
         string(name: 'AwsRegion', defaultValue: 'us-east-1', description: 'Amazon region to deploy resources into')
         string(name: 'AwsCred', description: 'Jenkins-stored AWS credential with which to execute cloud-layer commands')
         string(name: 'StackRoot', description: 'Name to give to parent CFn stack')
@@ -46,7 +48,7 @@ pipeline {
                 ) {
                     sh '''#!/bin/bash
 
-                        AMZNAMI="\$( aws ec2 describe-images --owner amazon --filters 'Name=name,Values=amzn2-ami-hvm-2.*-x86_64-gp2' --query 'Images[?CreationDate >= `'\$( date --date="7 days ago" '+%F' )'`].ImageId' --output text )"
+                        AMZNAMI="\$( aws ec2 describe-images --owner amazon --filters 'Name=name,Values=amzn2-ami-hvm-2.*-x86_64-gp2' --query 'Images[?CreationDate >= `'\$( date --date="${CheckHorizon} days ago" '+%F' )'`].ImageId' --output text )"
 
                         # Ensure there was a recently-published Amazon AMI
                         if [[ -z ${AMZNAMI} ]]
