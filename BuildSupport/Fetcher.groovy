@@ -16,12 +16,14 @@ pipeline {
     }
 
     environment {
+        CheckHorizon = 7
         AWS_DEFAULT_REGION = "${AwsRegion}"
         AWS_CA_BUNDLE = '/etc/pki/tls/certs/ca-bundle.crt'
         REQUESTS_CA_BUNDLE = '/etc/pki/tls/certs/ca-bundle.crt'
     }
 
     parameters {
+        string(name: 'NotifyEmail', description: 'Email-recipient for job-status notifications')
         string(name: 'AwsRegion', defaultValue: 'us-east-1', description: 'Amazon region to deploy resources into')
         string(name: 'AwsCred', description: 'Jenkins-stored AWS credential with which to execute cloud-layer commands')
         string(name: 'StackRoot', description: 'Name to give to parent CFn stack')
@@ -46,7 +48,7 @@ pipeline {
                 ) {
                     sh '''#!/bin/bash
 
-                        AMZNAMI="\$( aws ec2 describe-images --owner amazon --filters 'Name=name,Values=amzn2-ami-hvm-2.*-x86_64-gp2' --query 'Images[?CreationDate >= `'\$( date --date="7 days ago" '+%F' )'`].ImageId' --output text )"
+                        AMZNAMI="\$( aws ec2 describe-images --owner amazon --filters 'Name=name,Values=amzn2-ami-hvm-2.*-x86_64-gp2' --query 'Images[?CreationDate >= `'\$( date --date="${CheckHorizon} days ago" '+%F' )'`].ImageId' --output text )"
 
                         # Ensure there was a recently-published Amazon AMI
                         if [[ -z ${AMZNAMI} ]]
@@ -69,11 +71,21 @@ pipeline {
                             -e 's/__SGID__/'"${SecurityGroups}"'/'\
                             -e 's/__SUBNET_ID__/'"${Ec2Subnet}"'/' \
                            BuildSupport/parms.json > parent.parms
+
+                        # Delete any blocking stacks
+                        echo "Ensure there's no blocking stacks..."
+                        aws cloudformation delete-stack --stack-name ${StackRoot}
+                        aws cloudformation wait stack-delete-complete --stack-name ${StackRoot}
                     '''
                 }
             }
         }
         stage ('Launch Stack') {
+            when {
+                expression {
+                    fileExists('parent.parms')
+                }
+            }
             steps {
                 withCredentials(
                     [
@@ -88,6 +100,7 @@ pipeline {
                               --disable-rollback --stack-name ${StackRoot} \
                               --template-body file://BuildSupport/parent.tmplt.json \
                               --parameters file://parent.parms
+                           touch .check-status
                         else
                            echo "Could not find parent.parms file"
                            exit 1
@@ -97,6 +110,11 @@ pipeline {
             }
         }
         stage ('Check Stack Create-Status') {
+            when {
+                expression {
+                    fileExists('.check-status')
+                }
+            }
             steps {
                 withCredentials(
                     [
@@ -130,10 +148,34 @@ pipeline {
                                 )$? -eq 0 ]]
                         then
                            echo "Stack-creation successful"
+                           touch .build-success
                         else
                            echo "Stack-creation ended with non-successful state"
                            exit 1
                         fi
+                    '''
+                }
+            }
+        }
+        stage ('Cleanup AWS') {
+            when {
+                expression {
+                    fileExists('.build-success')
+                }
+            }
+            steps {
+                withCredentials(
+                    [
+                        [$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: "${AwsCred}", secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
+                    ]
+                ) {
+                    sh '''#!/bin/bash
+                        echo "Initiating deletion of stack '${StackRoot}'..."
+                        aws cloudformation delete-stack --stack-name ${StackRoot}
+
+                        echo "Waiting for deletion of stack '${StackRoot}'..."
+                        aws cloudformation wait stack-delete-complete --stack-name ${StackRoot} \
+                          && echo "Delete succeeded"
                     '''
                 }
             }
