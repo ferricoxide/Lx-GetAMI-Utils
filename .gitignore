@@ -1,1 +1,12 @@
 *.src.rpm
+
+# Not compatible with ELx AMIs
+amazon-linux-onprem*
+
+# Conflicts with RHEL/CentOS package
+amazonlinux-indexhtml*
+
+# Weird dependency problems
+aws-cli-plugin-cloudwatch-logs*
+awscli*
+awslogs*
