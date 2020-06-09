@@ -38,8 +38,12 @@ pipeline {
                    printf "Attempting to fetch current amazon-ssm-agent version... "
                    curl -sOkL "${DownloadUrl}" && echo "Success" || echo "Failed"
 
-                   printf "Renaming download to %s... " "$( rpm -qp amazon-ssm-agent.rpm --qf '%{name}-%{version}-%{release}.el7.%{arch}.rpm' )"
-                   mv amazon-ssm-agent.rpm $( rpm -qp amazon-ssm-agent.rpm --qf '%{name}-%{version}-%{release}.el7.%{arch}.rpm' )  && echo "Success" || echo "Failed"
+                   NEWNAME="$( rpm -qp amazon-ssm-agent.rpm --qf '%{name}-%{version}-%{release}.el7.%{arch}.rpm' )"
+
+                   printf "Renaming download to %s... " "${NEWNAME}"
+                   mv amazon-ssm-agent.rpm \${NEWNAME}  && echo "Success" || echo "Failed"
+
+                   cp \${NEWNAME} \${NEWNAME/el7/el8}
                 '''
             }
         }
@@ -53,18 +57,23 @@ pipeline {
                     sh '''#!/bin/bash
                        set -euo pipefail
 
-                       UPLOADFILE="\$( stat -c '%n' amazon-ssm-agent*el7.x86_64.rpm )"
+                       UPLOADFILES=( \$( stat -c '%n' amazon-ssm-agent*el{7,8}.x86_64.rpm ) )
 
-                       echo "Checking for existence of s3://${StagingBucket}${UPLOADFILE} ..."
+                       echo "Files to upload: \${UPLOADFILES[*]}"
 
-                       if [[ $( aws s3 ls "s3://${StagingBucket}${UPLOADFILE}" > /dev/null 2>&1 )$? -eq 0 ]]
-                       then
-                          echo "\${UPLOADFILE} already exists in s3://${StagingBucket}"
-                       else
-                          printf "copying \${UPLOADFILE} to s3://${StagingBucket} ...\n"
-                          aws s3 cp \${UPLOADFILE} s3://${StagingBucket}\${UPLOADFILE} && \
-                            echo "Success" || ( echo "Failed" ; exit 1)
-                       fi
+                       for UPLOADFILE in \${UPLOADFILES[*]}
+                       do
+                          echo "Checking for existence of s3://${StagingBucket}\${UPLOADFILE} ..."
+
+                          if [[ $( aws s3 ls "s3://${StagingBucket}\${UPLOADFILE}" > /dev/null 2>&1 )$? -eq 0 ]]
+                          then
+                             echo "\${UPLOADFILE} already exists in s3://${StagingBucket}"
+                          else
+                             printf "copying \${UPLOADFILE} to s3://${StagingBucket} ...\n"
+                             aws s3 cp \${UPLOADFILE} s3://${StagingBucket}\${UPLOADFILE} && \
+                               echo "Success" || ( echo "Failed" ; exit 1)
+                          fi
+                       done
                     '''
                 }
             }
